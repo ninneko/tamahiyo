@@ -11,7 +11,8 @@ libraryDependencies ++= Seq(
 //  anorm,
 //  cache,
 //  ws,
-  "com.typesafe.play" %% "play-slick" % "0.8.1"
+  "com.typesafe.play" %% "play-slick" % "0.8.1",
+  "org.sisioh" % "scala-dddbase-core_2.10" % "0.1.29"
 )
 
 
