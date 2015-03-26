@@ -1,52 +1,72 @@
 package core
 
-import models.Tables._
 import java.util.Date
+
 import akka.actor.Actor
-import core.Types._
+import core.KokkoTypes.Player
+import play.api.Logger
+//import core.Types._
 
 /**
+ * ゲーム部屋.
  * Created by ROS on 2015/03/18.
  */
 case class Room(hash: String, id: Int, created: Date = new Date(), var member: List[Player] = List.empty) {
-
+  lazy val creator = member.head
 
   def join(n: Player) = {
     if (member.size <= KokkoCore.MAX_PLAYER) {
       member = member :+ n
-      println("Join " + this + ":" + n)
+      Logger.info("Join:Joined" + n + this);
       true
     } else {
-      println("Max Player")
+      Logger.info("Join:MaxPlayer" + this);
       false
     }
   }
+
   def leave(n: Player) = member = member.filterNot(_ == n)
+
   def list = member
+
 }
 
 object KokkoRoom {
+
   case class Create(n: String, p: Player)
+
   case class Join(r: Any, p: Player)
-  case class Leave(r: Any, p: Player)
-  case class List()
+
+  case class Leave(p: Player)
+
+  case class Break(p: Player)
+
+  case class Listing()
+
 }
+
+/**
+ * ゲーム部屋管理.
+ * TODO:書き直す。REDISに保存するべき
+ * Created by ROS on 2015/03/18.
+ */
 class KokkoRoom extends Actor {
   var room: List[Room] = List.empty
 
   def genId = {
-    Stream.from(1).collectFirst { case n: Int if !room.map(_.id).contains(n) => n }
+    Stream.from(1).collectFirst { case n: Int if !room.map(_.id).contains(n) => n}
   }
 
-  def findRoom(find: Any) : Option[Room] = {
+  def findRoom(find: Any): Option[Room] = {
     find match {
       //find by hash
-      case String=> this.room.find(_.hash == find.asInstanceOf[String] )
+      case s:String => this.room.find(_.hash == find.asInstanceOf[String])
       //find by Id
-      case Int =>  this.room.find(_.id == find.asInstanceOf[Int] )
+      case s:Int => this.room.find(_.id == find.asInstanceOf[Int])
       case _ => None
     }
   }
+
 
   def receive = {
 
@@ -61,23 +81,35 @@ class KokkoRoom extends Actor {
 
     case KokkoRoom.Join(find: Any, p: Player) =>
       findRoom(find) match {
-        case None=>
+        case None =>
           sender ! false
-        case Some(r)=>
+        case Some(r) =>
           sender ! r.join(p)
       }
 
-    case KokkoRoom.Leave(find: Any, p: Player) =>
-      findRoom(find) match {
-        case None=>
+    case KokkoRoom.Leave(p: Player) =>
+      val mRoom = this.room.find(_.member.exists(_==p))
+
+      mRoom match {
+        case None =>
           sender ! false
-        case Some(r)=>
+        case Some(r) =>
           sender ! r.leave(p)
       }
 
-    case KokkoRoom.List =>
+    case KokkoRoom.Break(p: Player) =>
+      val mRoom = this.room.find(_.member.exists(_==p))
+      mRoom match {
+        case None =>
+        case Some(r) if r.creator == p =>
+          //ホストで部屋にはいってる
+          room = room.filterNot(_==r) //部屋リストから除外(解散)
+        case _=>
+      }
+      sender ! room
+    case KokkoRoom.Listing =>
       sender ! room
     case _ =>
-      println("unrecognized message!");
+      Logger.info("Unrecognized Message : " + this);
   }
 }
